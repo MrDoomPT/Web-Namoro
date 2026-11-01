@@ -16,34 +16,48 @@
             --neon-shadow: 0 0 25px rgba(255, 51, 133, 0.7);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body html, body {
+        body /* Estrutura base da página mobile */
+html, body {
   height: 100%;
   height: 100dvh;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  background-color: var(--bg-dark);
+  color: var(--text-light);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* Container principal do chat ocupando o ecrã inteiro */
 #chat-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
+  width: 100%;
 }
 
+/* Lista de mensagens com scroll fluido */
 #messages {
   flex: 1;
   overflow-y: auto;
+  padding: 10px;
 }
 
+/* Caixa de input fixa em baixo, garantindo que não fica oculta */
 #chat-form {
   display: flex;
-  padding: 10px;
+  padding: 12px;
   background: var(--bg-panel);
   position: sticky;
   bottom: 0;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
-} { background-color: var(--bg-dark); color: var(--text-light); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 100;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+ { background-color: var(--bg-dark); color: var(--text-light); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
         #auth-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
