@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Namoro 💖</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg-dark: #12031d;
+            --bg-panel: #1b072e;
+            --pink-main: #ff3385;
+            --pink-glow: #ff66a3;
+            --text-light: #fce4ec;
+            --purple-modal: #220938;
+            --neon-shadow: 0 0 25px rgba(255, 51, 133, 0.7);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-light); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        #auth-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #290a46 0%, #12031d 100%);
+            display: flex; justify-content: center; align-items: center; z-index: 2000;
+        }
+        .auth-card {
+            background: var(--bg-panel); padding: 40px; border-radius: 24px;
+            box-shadow: 0 0 50px rgba(255, 51, 133, 0.4); text-align: center; width: 380px; border: 2px solid var(--pink-main);
+        }
+        .auth-card h1 { color: var(--pink-glow); margin-bottom: 20px; font-size: 34px; text-shadow: 0 0 15px var(--pink-main); font-weight: 800; }
+        .auth-card input {
+            width: 100%; padding: 14px; margin: 10px 0; background: #260b40; border: 2px solid var(--pink-main);
+            border-radius: 12px; color: white; font-size: 16px; outline: none;
+        }
+        .auth-card button {
+            width: 100%; padding: 14px; background: linear-gradient(135deg, #ff3385, #ff0066); border: none; border-radius: 12px;
+            color: white; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 15px; box-shadow: var(--neon-shadow);
+        }
+
+        #chat-screen { display: none; height: 100vh; display: flex; flex-direction: column; }
+        header {
+            background: var(--bg-panel); padding: 15px 25px; display: flex; justify-content: space-between;
+            align-items: center; border-bottom: 3px solid var(--pink-main); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        header h2 { color: var(--pink-glow); text-shadow: 0 0 12px var(--pink-main); font-size: 26px; }
+        
+        .online-badge {
+            display: flex; align-items: center; background: var(--bg-panel); border: 2px solid var(--pink-main);
+            border-radius: 50px; padding: 8px 18px; box-shadow: 0 0 15px rgba(255, 51, 133, 0.3);
+        }
+        .online-text { color: var(--pink-glow); font-weight: 600; font-size: 15px; }
+
+        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+        sidebar {
+            width: 310px; background: var(--bg-panel); border-right: 2px solid #311152;
+            display: flex; flex-direction: column; padding: 15px; overflow-y: auto;
+        }
+        sidebar h3 { font-size: 14px; margin-bottom: 12px; color: var(--pink-glow); text-transform: uppercase; letter-spacing: 1.5px; }
+        .user-item {
+            display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
+            margin-bottom: 8px; background: #220838; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255, 51, 133, 0.2);
+        }
+        .user-item:hover { background: #331154; border-color: var(--pink-main); }
+        .user-info { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .user-info img { width: 38px; height: 38px; border-radius: 50%; background: #fff; border: 2px solid var(--pink-main); }
+        .badge { font-size: 10px; padding: 2px 7px; border-radius: 6px; font-weight: bold; }
+        .badge-owner { background: gold; color: black; box-shadow: 0 0 10px gold; }
+        .badge-admin { background: #00ffff; color: black; box-shadow: 0 0 10px #00ffff; }
+        .badge-bot { background: #ffcc00; color: black; box-shadow: 0 0 10px #ffcc00; }
+
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: #100319; }
+        .chat-messages { flex: 1; padding: 35px 20px 20px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+        
+        .message {
+            background: #1b072e; padding: 14px 18px; border-radius: 16px; width: fit-content; max-width: 65%;
+            align-self: flex-start; position: relative; border: 2px solid #ffcc00; word-break: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        .message.bot-msg { border-color: #ffcc00; background: #1b072e; }
+        .message.other-msg { border-color: var(--pink-main); background: #1b072e; }
+        .message.own { align-self: flex-end; border: none; background: var(--pink-main); border-radius: 16px; box-shadow: 0 0 20px rgba(255, 51, 133, 0.5); }
+        .message.private { border-color: #00ffff !important; background: #121c2e !important; }
+        .message.private.own { background: #0088cc !important; }
+        
+        .msg-header { font-size: 12px; color: #ff99cc; margin-bottom: 4px; font-weight: bold; display: flex; justify-content: space-between; gap: 20px; }
+        .message.own .msg-header { color: #ffe6f2; }
+        .msg-body { font-size: 15px; line-height: 1.5; color: #fff; }
+        
+        .telegram-reaction-bar {
+            position: absolute; top: -42px; left: 0; background: #250942; border: 2px solid var(--pink-main);
+            border-radius: 30px; padding: 4px 10px; display: none; gap: 8px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.9); z-index: 9999; white-space: nowrap;
+        }
+        .message.own .telegram-reaction-bar { left: auto; right: 0; }
+        .message:hover .telegram-reaction-bar { display: flex; }
+        .tg-quick-emoji { background: none; border: none; font-size: 20px; cursor: pointer; padding: 2px; transition: transform 0.15s; pointer-events: auto; }
+        .tg-quick-emoji:hover { transform: scale(1.4); }
+
+        .reactions-box { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+        .reaction-pill { 
+            background: #2c0b4a; padding: 4px 10px; border-radius: 14px; font-size: 13px; 
+            cursor: pointer; border: 1px solid var(--pink-main); color: #fff; transition: 0.2s;
+        }
+        .reaction-pill:hover { background: var(--pink-main); transform: scale(1.08); }
+
+        .chat-input-bar {
+            padding: 15px 20px; background: var(--bg-panel); display: flex; gap: 12px; align-items: center; border-top: 3px solid #311152;
+        }
+        .chat-input-bar input {
+            flex: 1; padding: 14px; background: #260b40; border: 2px solid var(--pink-main); border-radius: 12px; color: white; outline: none; font-size: 16px;
+        }
+        .chat-input-bar button {
+            padding: 12px 26px; background: linear-gradient(135deg, #ff3385, #ff0066); border: none; border-radius: 12px;
+            color: white; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: var(--neon-shadow);
+        }
+
+        #private-modal {
+            position: fixed; bottom: 20px; right: 20px; width: 400px; height: 500px;
+            background: var(--purple-modal); border: 2px solid #00ffff; border-radius: 20px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.4); display: none; flex-direction: column; z-index: 1500; overflow: hidden;
+        }
+        .private-header {
+            background: #11031c; padding: 14px 18px; display: flex; justify-content: space-between;
+            align-items: center; border-bottom: 2px solid #00ffff; color: #00ffff; font-weight: bold; font-size: 16px;
+        }
+        .private-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #140421; }
+        .private-input-bar { padding: 12px; background: #11031c; display: flex; gap: 10px; border-top: 1px solid #00ffff; }
+        .private-input-bar input { flex: 1; padding: 12px; background: #260b40; border: 1px solid #00ffff; border-radius: 10px; color: white; outline: none; }
+        .private-input-bar button { padding: 10px 18px; background: #00ffff; border: none; border-radius: 10px; color: black; font-weight: bold; cursor: pointer; }
+
+        .notif-badge { background: #ff0055; color: white; border-radius: 50px; padding: 3px 8px; font-size: 11px; font-weight: bold; }
+        .mod-btns { display: flex; align-items: center; gap: 4px; }
+        .mod-btn { background: none; border: none; cursor: pointer; font-size: 14px; transition: transform 0.2s; }
+        .mod-btn:hover { transform: scale(1.2); }
+    </style>
+</head>
+<body>
+
+    <div id="auth-screen">
+        <div class="auth-card">
+            <h1>Web Namoro 💖</h1>
+            <p style="font-size: 13px; color: #d1c4e9; margin-bottom: 20px;">Entra com o teu nick exclusivo e senha secreta.</p>
+            <input type="text" id="username" placeholder="Nome de Utilizador (ex: Lemos)" autocomplete="off">
+            <input type="password" id="password" placeholder="Senha secreta" autocomplete="current-password">
+            <input type="text" id="avatar" placeholder="URL do Avatar (Opcional)">
+            <button onclick="login()">Entrar no Chat 🚀</button>
+        </div>
+    </div>
+
+    <div id="chat-screen">
+        <header>
+            <h2>💖 Web Namoro - Chat Geral</h2>
+            <div class="online-badge">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#00bfff" style="margin-right: 8px;"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                <span class="online-text">Online: <span id="online-count" style="color: white;">0</span></span>
+            </div>
+        </header>
+        <div class="main-container">
+            <sidebar>
+                <h3>Membros Online</h3>
+                <div id="users-list"></div>
+            </sidebar>
+            <div class="chat-area">
+                <div class="chat-messages" id="chat-messages"></div>
+
+                <div class="chat-input-bar">
+                    <input type="text" id="message-input" placeholder="Escreve a tua mensagem... (Sem links e sem flood!)" onkeypress="handleKeyPress(event)">
+                    <button onclick="sendMessage()">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="private-modal">
+        <div class="private-header">
+            <span id="private-modal-title">🔒 Privado com @utilizador</span>
+            <button onclick="closePrivateModal()" style="background:none; border:none; color:white; font-size:18px; cursor:pointer; font-weight:bold;">✖</button>
+        </div>
+        <div class="private-messages" id="private-messages"></div>
+        <div class="private-input-bar">
+            <input type="text" id="private-message-input" placeholder="Escreve no privado..." onkeypress="handlePrivateKeyPress(event)">
+            <button onclick="sendPrivateMessage()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentUser = null;
+        let activeRecipient = null;
+
+        function login() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const avatar = document.getElementById('avatar').value.trim();
+
+            if (!username || !password) {
+                alert('Preencha o nome e a senha!');
+                return;
+            }
+
+            socket.emit('auth', { username, password, avatar }, (res) => {
+                if (res.success) {
+                    currentUser = res.user;
+                    document.getElementById('auth-screen').style.display = 'none';
+                    document.getElementById('chat-screen').style.display = 'flex';
+                    socket.emit('get_history', { username: currentUser.username, recipient: null });
+                } else {
+                    alert(res.message);
+                }
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            if (!content) return;
+
+            socket.emit('send_message', { recipient: null, content });
+            input.value = '';
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function openPrivateChat(username) {
+            if (username === currentUser.username || username === 'Mel 🤖') return;
+            activeRecipient = username;
+            document.getElementById('private-modal-title').innerText = `🔒 Privado com @${username}`;
+            document.getElementById('private-modal').style.display = 'flex';
+            
+            const badge = document.getElementById(`notif-${username}`);
+            if (badge) badge.innerHTML = '';
+
+            socket.emit('get_history', { username: currentUser.username, recipient: username });
+        }
+
+        function closePrivateModal() {
+            activeRecipient = null;
+            document.getElementById('private-modal').style.display = 'none';
+        }
+
+        function sendPrivateMessage() {
+            const input = document.getElementById('private-message-input');
+            const content = input.value.trim();
+            if (!content || !activeRecipient) return;
+
+            socket.emit('send_message', { recipient: activeRecipient, content });
+            input.value = '';
+        }
+
+        function handlePrivateKeyPress(e) {
+            if (e.key === 'Enter') sendPrivateMessage();
+        }
+
+        socket.on('chat_history', (messages) => {
+            if (activeRecipient) {
+                const container = document.getElementById('private-messages');
+                container.innerHTML = '';
+                messages.forEach(msg => appendMessage(msg, container, activeRecipient));
+                container.scrollTop = container.scrollHeight;
+            } else {
+                const container = document.getElementById('chat-messages');
+                container.innerHTML = '';
+                messages.forEach(msg => appendMessage(msg, container, null));
+                container.scrollTop = container.scrollHeight;
+            }
+        });
+
+        socket.on('message', (msg) => {
+            if (msg.recipient) {
+                if (msg.sender === currentUser.username || msg.recipient === currentUser.username) {
+                    if (activeRecipient === msg.sender || activeRecipient === msg.recipient) {
+                        const container = document.getElementById('private-messages');
+                        appendMessage(msg, container, activeRecipient);
+                        container.scrollTop = container.scrollHeight;
+                    } else if (msg.sender !== currentUser.username) {
+                        const badgeContainer = document.getElementById(`notif-${msg.sender}`);
+                        if (badgeContainer) badgeContainer.innerHTML = `<span class="notif-badge">NOVA</span>`;
+                    }
+                }
+            } else {
+                const container = document.getElementById('chat-messages');
+                appendMessage(msg, container, null);
+                container.scrollTop = container.scrollHeight;
+            }
+        });
+
+        socket.on('system_message', (text) => {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.style.textAlign = 'center';
+            div.style.color = '#ff66a3';
+            div.style.fontSize = '13px';
+            div.style.margin = '8px 0';
+            div.innerHTML = `<i>${text}</i>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        });
+
+        socket.on('online_users', (users) => {
+            document.getElementById('online-count').innerText = users.length;
+            const list = document.getElementById('users-list');
+            list.innerHTML = '';
+            users.forEach(u => {
+                let badge = '';
+                if (u.role === 'owner') badge = `<span class="badge badge-owner">DONO</span>`;
+                else if (u.role === 'admin') badge = `<span class="badge badge-admin">ADMIN</span>`;
+                else if (u.role === 'bot') badge = `<span class="badge badge-bot">BOT</span>`;
+
+                let actionButtons = '';
+                if (u.username !== 'Mel 🤖' && currentUser && (currentUser.role === 'owner' || currentUser.role === 'admin') && u.username !== currentUser.username) {
+                    if (currentUser.role === 'owner' && u.role !== 'owner') {
+                        if (u.role === 'admin') {
+                            actionButtons += `<button class="mod-btn" onclick="demoteAdmin('${u.username}')" title="Despromover a Membro">📉</button>`;
+                        } else {
+                            actionButtons += `<button class="mod-btn" onclick="setAdmin('${u.username}')" title="Promover a Admin">⭐</button>`;
+                        }
+                    }
+                    actionButtons += `<button class="mod-btn" onclick="kickUser('${u.username}')" title="Expulsar (Kick)">❌</button>`;
+                    actionButtons += `<button class="mod-btn" onclick="banUser('${u.username}')" title="Banir Definitivamente">🔨</button>`;
+                }
+
+                const div = document.createElement('div');
+                div.className = 'user-item';
+                div.innerHTML = `
+                    <div class="user-info" onclick="openPrivateChat('${u.username}')" style="cursor:pointer;">
+                        <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${u.username}" alt="avatar">
+                        <div>
+                            <div style="font-size:14px; font-weight:bold;">${u.username} ${badge}</div>
+                            <div style="font-size:11px; color:#bcaaa4;">${u.username === 'Mel 🤖' ? 'Assistente Virtual 🤖' : 'Chat Privado 💬'}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div id="notif-${u.username}"></div>
+                        <div class="mod-btns">${actionButtons}</div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        });
+
+        function kickUser(targetUser) {
+            if (confirm(`Tens a certeza que queres expulsar @${targetUser}?`)) {
+                socket.emit('kick_user', { targetUser });
+            }
+        }
+
+        function banUser(targetUser) {
+            if (confirm(`⚠️ ATENÇÃO: Desejas mesmo BANIR DEFINITIVAMENTE @${targetUser}?`)) {
+                socket.emit('ban_user', { targetUser });
+            }
+        }
+
+        function setAdmin(targetUser) {
+            if (confirm(`Promover @${targetUser} a Administrador?`)) {
+                socket.emit('set_admin', { targetUser });
+            }
+        }
+
+        function demoteAdmin(targetUser) {
+            if (confirm(`Despromover @${targetUser} a Membro comum?`)) {
+                socket.emit('demote_admin', { targetUser });
+            }
+        }
+
+        socket.on('kicked', (reason) => {
+            alert(reason);
+            window.location.reload();
+        });
+
+        function appendMessage(msg, container, recipientContext) {
+            const div = document.createElement('div');
+            const isOwn = currentUser && msg.sender === currentUser.username;
+            const isBot = msg.sender.includes('Mel');
+            
+            let msgClass = 'other-msg';
+            if (isOwn) msgClass = 'own';
+            else if (isBot) msgClass = 'bot-msg';
+
+            div.className = `message ${msg.recipient ? 'private' : ''} ${msgClass}`;
+            div.id = `msg-${msg.id}`;
+
+            let reactionsObj = {};
+            try { reactionsObj = JSON.parse(msg.reactions); } catch(e){}
+
+            let reactionsHtml = '';
+            for (let [emoji, users] of Object.entries(reactionsObj)) {
+                reactionsHtml += `<span class="reaction-pill" onclick="react(${msg.id}, '${emoji}')">${emoji} ${users.length}</span>`;
+            }
+
+            div.innerHTML = `
+                <div class="telegram-reaction-bar">
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '❤️')">❤️</button>
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '🔥')">🔥</button>
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '😍')">😍</button>
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '✨')">✨</button>
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '👍')">👍</button>
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '😂')">😂</button>
+                    <button class="tg-quick-emoji" onclick="reactQuick(${msg.id}, '🥺')">🥺</button>
+                </div>
+                <div class="msg-header">
+                    <span><b>@${msg.sender}</b> ${msg.recipient ? '(Privado)' : ''}</span>
+                    <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
+                <div class="msg-body">${escapeHtml(msg.content)}</div>
+                <div class="reactions-box" id="reactions-${msg.id}">${reactionsHtml}</div>
+            `;
+            container.appendChild(div);
+        }
+
+        function reactQuick(msgId, emoji) {
+            socket.emit('react_message', { messageId: msgId, emoji, recipient: activeRecipient });
+        }
+
+        function react(msgId, emoji) {
+            socket.emit('react_message', { messageId: msgId, emoji, recipient: activeRecipient });
+        }
+
+        socket.on('update_reactions', ({ messageId, reactions }) => {
+            const box = document.getElementById(`reactions-${messageId}`);
+            if (!box) return;
+            let html = '';
+            for (let [emoji, users] of Object.entries(reactions)) {
+                html += `<span class="reaction-pill" onclick="react(${messageId}, '${emoji}')">${emoji} ${users.length}</span>`;
+            }
+            box.innerHTML = html;
+        });
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
